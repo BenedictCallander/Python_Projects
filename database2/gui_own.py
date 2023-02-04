@@ -172,8 +172,7 @@ def stockcheck():
     data = read_data_from_db()
     populate_table(data)
 
-def usedsys():
-    
+
 
 
 
