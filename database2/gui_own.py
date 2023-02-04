@@ -1,10 +1,64 @@
 import customtkinter as Ctk
 from tkinter import * 
 from tkinter import ttk
-
+import uuid 
+import csv
 import sqlite3
+import glob
+import pandas as pd 
+from pandastable import Table
+from datetime import datetime
+import time
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg, NavigationToolbar2Tk)
 #import add_adjust
+
 root=Tk()
+
+
+def stock_backup():
+    dt=datetime.today().strftime('%Y-%m-%d-%H-%M-%S')
+    tstamp=datetime.today().strftime('')
+    # Connect to the database file
+    conn = sqlite3.connect("stock.db")
+
+    # Read data from the table into a pandas dataframe
+    df = pd.read_sql_query("SELECT * FROM stock", conn)
+    df['datetime']=time.time()
+    # Close the connection to the database
+    conn.close()
+
+    # Write the dataframe to a CSV file
+    df.to_csv("stockbackup/{}.csv".format(dt), index=False)
+
+def history_plot():
+    hw = Toplevel()
+    files=glob.glob("stockbackup/*.csv")
+    combine=[]
+    ex=pd.read_csv(files[1])
+    names=list(ex['name'])
+    times=[]
+    for i in range(len(files)):
+        df=pd.read_csv(files[i])
+        combine.append(df)
+        times.append(df.iloc[0]["datetime"])
+    final=pd.concat(combine)
+    final.sort_values(by='datetime')
+    fig=plt.figure()
+    for name in names:
+        dft=final.copy()
+        dft=dft[dft['name'].isin([name])]
+        plt.plot(dft['datetime'],dft['stock'],label=str(name))
+    ticks=[]
+    for timestamp in times:
+        dt_object = datetime.fromtimestamp(timestamp)
+        ticks.append(dt_object)
+    plt.xticks(ticks=times, labels=ticks,rotation='vertical')
+    plt.legend(loc="upper right")
+    canvas = FigureCanvasTkAgg(fig,master = hw)  
+    canvas.draw()
+    canvas.get_tk_widget().pack()
+    plt.close()
 
 def add():
     def add_product():
@@ -49,7 +103,7 @@ def add():
 
     button_add = Button(addwindow, text="Add Product", command=add_product)
     button_add.grid(row=3, column=0, columnspan=2)
-
+    
 
     label_name_adjust = Label(addwindow, text="Name")
     label_name_adjust.grid(row=4, column=0)
@@ -64,7 +118,7 @@ def add():
     # create button for adjusting stock
     button_adjust = Button(addwindow, text="Adjust Stock", command=adjust_stock)
     button_adjust.grid(row=6, column=0, columnspan=2)
-
+    stock_backup()
 
 
     closebutton= Button(addwindow, text = "Close", command=addwindow.destroy)
@@ -74,7 +128,6 @@ def adjust():
     win = Toplevel()
     win.title("Adjust Stock")
     win.geometry("500x500")
-
     def adjust_stock():
         # update stock level in database
         conn = sqlite3.connect('stock.db')
@@ -98,6 +151,7 @@ def adjust():
     # create button for adjusting stock
     button_adjust = Button(win, text="Adjust Stock", command=adjust_stock)
     button_adjust.grid(row=2, column=0, columnspan=2)
+    stock_backup()
 
 def adjust_price():
     winP = Toplevel()
@@ -172,9 +226,64 @@ def stockcheck():
     data = read_data_from_db()
     populate_table(data)
 
+def usedsys():
+    def add_system():
+        system_info = [manufacturer_entry.get(), cpu_entry.get(), psu_entry.get(), ram_entry.get()]
+        sysID = uuid.uuid4()
+        fpath = "temp/{}.csv".format(sysID)
+        with open(fpath, 'a', newline='') as file:
+            writer = csv.writer(file)
+            if file.tell() == 0:  # if file is empty, write column headings
+                writer.writerow(["Manufacturer", "CPU", "PSU", "RAM"])
+            writer.writerow(system_info)
+        manufacturer_entry.delete(0, 'end')
+        cpu_entry.delete(0, 'end')
+        psu_entry.delete(0, 'end')
+        ram_entry.delete(0, 'end')
+
+    usedWIN = Toplevel()
+    usedWIN.title("System Information")
+    usedWIN.configure(bg="#F18E0F")
 
 
+    manufacturer_label = Label(usedWIN, text="Manufacturer:",bg="#F18E0F")
+    manufacturer_label.grid(row=0, column=0)
 
+    manufacturer_entry = Entry(usedWIN)
+    manufacturer_entry.grid(row=0, column=1)
+
+    cpu_label = Label(usedWIN, text="CPU:",bg="#F18E0F")
+    cpu_label.grid(row=1, column=0)
+
+    cpu_entry = Entry(usedWIN)
+    cpu_entry.grid(row=1, column=1)
+
+    psu_label = Label(usedWIN, text="PSU (W):",bg="#F18E0F")
+    psu_label.grid(row=2, column=0)
+
+    psu_entry = Entry(usedWIN)
+    psu_entry.grid(row=2, column=1)
+
+    ram_label = Label(usedWIN, text="RAM (GB):",bg="#F18E0F")
+    ram_label.grid(row=3, column=0)
+
+    ram_entry = Entry(usedWIN)
+    ram_entry.grid(row=3, column=1)
+
+    add_button = Button(usedWIN, text="Add System", command=add_system)
+    add_button.grid(row=4, column=0, columnspan=2, pady=10)
+
+def sysstock():
+    sysfiles=glob.glob("temp/*.csv")
+    combine=[]
+    for i in range(len(sysfiles)):
+        df=pd.read_csv(sysfiles[i])
+        combine.append(df)
+    final = pd.concat(combine)
+    #print(final)
+    stockwin = Toplevel()
+    table = pt= Table(stockwin, dataframe=final,showtoolbar=True, showstatusbar=True)
+    pt.show()
 
 
 p1 = PhotoImage(file = 'icon.png')
@@ -193,20 +302,24 @@ statement.grid(row=1, column=1)
 
 button1 = Button(root, text="Add Stock",bg='red', command=add, padx=50, pady=50)
 button2 = Button(root, text="Adjust stock",bg='blue', command= adjust, padx=50, pady=50)
-button3 = Button(root, text="Settings",bg='green', padx=50, pady=50)
+button3 = Button(root, text="System Stock",bg='green',command=sysstock, padx=50, pady=50)
 button4 = Button(root, text="View Inventory",bg='orange',command=stockcheck, padx=50, pady=50)
 button5 = Button(root, text="pricechange",bg='#C35F40',command=adjust_price, padx=50, pady=50)
-button6 = Button(root, text="Used-sys-import",bg='#F38060',command=adjust_price, padx=50, pady=50)
+button6 = Button(root, text="Used-sys-import",bg='#F38060',command=usedsys, padx=50, pady=50)
+button7 = Button(root, text="Stock-Backup",bg='#F38060',command=stock_backup, padx=50, pady=50)
+button8 = Button(root, text="Stock-Backup",bg='#F38060',command=history_plot, padx=50, pady=50)
 button1.grid(row=2, column=2)
 button2.grid(row=2, column=3)
 button3.grid(row=2, column=4)
 button4.grid(row=3, column=2)
 button5.grid(row=3, column=3)
 button6.grid(row=3, column=4)
+button7.grid(row=4,column=1)
+button8.grid(row=4, column=2)
 
 
-
-
+#stock_backup()
 root.mainloop()
+stock_backup()
 
 
